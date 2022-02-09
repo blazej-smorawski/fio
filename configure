@@ -2161,6 +2161,26 @@ fi
 print_config "libpmem1_5" "$libpmem1_5"
 
 ##########################################
+# Check whether we have libpmem2
+if test "$libpmem2" != "yes" ; then
+  libpmem2="no"
+fi
+cat > $TMPC << EOF
+#include <libpmem2.h>
+int main(int argc, char **argv)
+{
+  struct pmem2_config *cfg;
+  pmem2_config_new(&cfg);
+  pmem2_config_delete(&cfg);
+  return 0;
+}
+EOF
+if compile_prog "" "-lpmem2" "libpmem2"; then
+  libpmem2="yes"
+fi
+print_config "libpmem2" "$libpmem2"
+
+##########################################
 # Check whether we have libpmemblk
 # libpmem is a prerequisite
 if test "$libpmemblk" != "yes" ; then
@@ -2188,6 +2208,9 @@ if test "$libpmem" = "yes" && test "$disable_pmem" = "no"; then
   if test "$libpmem1_5" = "yes"; then
     pmem="yes"
   fi
+  if test "$libpmem2" = "yes"; then
+      pmem2="yes"
+    fi
   if test "$libpmemblk" = "yes"; then
     pmemblk="yes"
   fi
@@ -2204,6 +2227,10 @@ print_config "PMDK dev-dax engine" "$devdax"
 ##########################################
 # Report whether libpmem engine is enabled
 print_config "PMDK libpmem engine" "$pmem"
+
+##########################################
+# Report whether libpmem2 engine is enabled
+print_config "PMDK libpmem2 engine" "$pmem2"
 
 ##########################################
 # Check whether we support DDN's IME
@@ -3057,6 +3084,9 @@ if test "$devdax" = "yes" ; then
 fi
 if test "$pmem" = "yes" ; then
   output_sym "CONFIG_LIBPMEM"
+fi
+if test "$pmem2" = "yes" ; then
+  output_sym "CONFIG_LIBPMEM2"
 fi
 if test "$libime" = "yes" ; then
   output_sym "CONFIG_IME"
