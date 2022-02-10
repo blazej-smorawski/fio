@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <libminiasync.h>
 
 #include "../fio.h"
 #include "../optgroup.h"
@@ -18,13 +19,28 @@
  * Limits us to 1GiB of mapped files in total
  */
 #define MMAP_TOTAL_SZ	(1 * 1024 * 1024 * 1024UL)
+#define MAX_FUTURES_COUNT 128
 
 static unsigned long mmap_map_size;
 
 struct fio_libminiasync_data {
-	void *mmap_ptr;
-	size_t mmap_sz;
-	off_t mmap_off;
+    void *mmap_ptr;
+    size_t mmap_sz;
+    off_t mmap_off;
+    struct vdm *vdm;
+    struct runtime *r;
+    /*
+     * Array of futures that were not synchronised yet.
+     * It is limited by MAX_FUTURES_COUNT, so in fio job parameter
+     * sync_file_range=str:n, the n must not exceed MAX_FUTURES_COUNT
+     */
+    struct future futs[MAX_FUTURES_COUNT];
+    /*
+     * Array of pointers to futures in futs for passing to runtime_wait
+     */
+    struct future *futs_ptrs[MAX_FUTURES_COUNT];
+    size_t futs_count;
+    pthread_mutex_t futs_lock;
 };
 
 #ifdef CONFIG_HAVE_THP
@@ -50,7 +66,7 @@ static struct fio_option options[] = {
 #endif
 
 static bool fio_madvise_file(struct thread_data *td, struct fio_file *f,
-			     size_t length)
+	size_t length)
 
 {
 	struct fio_libminiasync_data *fmd = FILE_ENG_DATA(f);
@@ -97,7 +113,7 @@ static int fio_mmap_get_shared(struct thread_data *td)
 #endif
 
 static int fio_mmap_file(struct thread_data *td, struct fio_file *f,
-			 size_t length, off_t off)
+	size_t length, off_t off)
 {
 	struct fio_libminiasync_data *fmd = FILE_ENG_DATA(f);
 	int flags = 0, shared = fio_mmap_get_shared(td);
@@ -132,7 +148,7 @@ static int fio_mmap_file(struct thread_data *td, struct fio_file *f,
 		(void) posix_madvise(fmd->mmap_ptr, fmd->mmap_sz, FIO_MADV_FREE);
 #endif
 
-err:
+	err:
 	if (td->error && fmd->mmap_ptr)
 		munmap(fmd->mmap_ptr, length);
 
@@ -217,14 +233,14 @@ static int fio_mmapio_prep(struct thread_data *td, struct io_u *io_u)
 			return ret;
 	}
 
-done:
+	done:
 	io_u->mmap_data = fmd->mmap_ptr + io_u->offset - fmd->mmap_off -
-				f->file_offset;
+			  f->file_offset;
 	return 0;
 }
 
 static enum fio_q_status fio_mmapio_queue(struct thread_data *td,
-					  struct io_u *io_u)
+	struct io_u *io_u)
 {
 	struct fio_file *f = io_u->file;
 	struct fio_libminiasync_data *fmd = FILE_ENG_DATA(f);
@@ -233,8 +249,9 @@ static enum fio_q_status fio_mmapio_queue(struct thread_data *td,
 
 	if (io_u->ddir == DDIR_READ)
 		memcpy(io_u->xfer_buf, io_u->mmap_data, io_u->xfer_buflen);
-	else if (io_u->ddir == DDIR_WRITE)
+	else if (io_u->ddir == DDIR_WRITE) {
 		memcpy(io_u->mmap_data, io_u->xfer_buf, io_u->xfer_buflen);
+	}
 	else if (ddir_sync(io_u->ddir)) {
 		if (msync(fmd->mmap_ptr, fmd->mmap_sz, MS_SYNC)) {
 			io_u->error = errno;
@@ -296,6 +313,14 @@ static int fio_mmapio_open_file(struct thread_data *td, struct fio_file *f)
 		return 1;
 	}
 
+	fmd->futs_count = 0;
+	pthread_mutex_init(&fmd->futs_lock, NULL);
+	for(int i=0;i<MAX_FUTURES_COUNT;i++) {
+		fmd->futs_ptrs[i] = &fmd->futs[i];
+	}
+	fmd->r = runtime_new();
+	fmd->vdm = vdm_new(vdm_descriptor_threads());
+
 	FILE_SET_ENG_DATA(f, fmd);
 	return 0;
 }
@@ -303,6 +328,10 @@ static int fio_mmapio_open_file(struct thread_data *td, struct fio_file *f)
 static int fio_mmapio_close_file(struct thread_data *td, struct fio_file *f)
 {
 	struct fio_libminiasync_data *fmd = FILE_ENG_DATA(f);
+
+	pthread_mutex_destroy(&fmd->futs_lock);
+	vdm_delete(fmd->vdm);
+	runtime_delete(fmd->r);
 
 	FILE_SET_ENG_DATA(f, NULL);
 	free(fmd);
@@ -312,7 +341,7 @@ static int fio_mmapio_close_file(struct thread_data *td, struct fio_file *f)
 }
 
 static struct ioengine_ops ioengine = {
-	.name		= "mmap",
+	.name		= "libminiasync",
 	.version	= FIO_IOOPS_VERSION,
 	.init		= fio_mmapio_init,
 	.prep		= fio_mmapio_prep,

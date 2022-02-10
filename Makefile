@@ -220,6 +220,11 @@ ifdef CONFIG_LIBPMEM2
   libpmem2_LIBS = -lpmem2
   ENGINES += libpmem2
 endif
+ifdef CONFIG_LIBMINIASYNC
+  libminiasync_SRCS = engines/libminiasync.c
+  libminiasync_LIBS = -lminiasync
+  ENGINES += libminiasync
+endif
 ifdef CONFIG_IME
   SOURCE += engines/ime.c
 endif

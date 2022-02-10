@@ -2233,6 +2233,25 @@ print_config "PMDK libpmem engine" "$pmem"
 print_config "PMDK libpmem2 engine" "$pmem2"
 
 ##########################################
+# Check whether we have libminiasync
+if test "$libminiasync" != "yes" ; then
+  libminiasync="no"
+fi
+cat > $TMPC << EOF
+#include <stdlib.h>
+#include <libminiasync.h>
+int main(int argc, char **argv)
+{
+  struct vdm_descriptor *vdm = vdm_descriptor_synchronous();
+  return 0;
+}
+EOF
+if compile_prog "" "-lminiasync" "libminiasync"; then
+  libminiasync="yes"
+fi
+print_config "libminiasync" "$libminiasync"
+
+##########################################
 # Check whether we support DDN's IME
 if test "$libime" != "yes" ; then
   libime="no"
@@ -3087,6 +3106,9 @@ if test "$pmem" = "yes" ; then
 fi
 if test "$pmem2" = "yes" ; then
   output_sym "CONFIG_LIBPMEM2"
+fi
+if test "$libminiasync" = "yes" ; then
+  output_sym "CONFIG_LIBMINIASYNC"
 fi
 if test "$libime" = "yes" ; then
   output_sym "CONFIG_IME"
