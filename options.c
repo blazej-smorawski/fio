@@ -2132,6 +2132,11 @@ struct fio_option fio_options[FIO_MAX_OPTS] = {
 				  .help = "PMDK libpmem2 based IO engine",
 			  },
 #endif
+#ifdef CONFIG_LIBPMEM2_ASYNC
+			  { .ival = "libpmem2_async",
+				  .help = "PMDK libpmem2 based asynchronous IO engine",
+			  },
+#endif
 #ifdef CONFIG_HTTP
 			  { .ival = "http",
 			    .help = "HTTP (WebDAV/S3) IO engine",

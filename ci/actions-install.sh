@@ -66,6 +66,8 @@ DPKGCFG
     sudo apt-get -qq update
     echo "Installing packages..."
     sudo apt-get install "$opts" -o APT::Immediate-Configure=false --no-install-recommends -qq -y "${pkgs[@]}"
+    echo "Installing PMDK from sources..."
+    "${SCRIPT_DIR}/travis-install-pmdk.sh"
 }
 
 install_linux() {

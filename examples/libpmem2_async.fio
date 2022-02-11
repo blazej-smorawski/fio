@@ -1,7 +1,7 @@
 [global]
-bs=4k
-size=1g
-ioengine=libpmem2
+bs=1g
+size=16g
+ioengine=libpmem2_async
 norandommap
 time_based
 group_reporting
@@ -11,8 +11,9 @@ disable_slat=1
 disable_clat=1
 clat_percentiles=0
 
-iodepth=10
-iodepth_batch=1
+iodepth=4
+iodepth_batch_complete_min=4
+iodepth_batch_complete_max=4
 thread
 numjobs=1
 runtime=30
@@ -27,12 +28,12 @@ direct=1
 #
 # sync=1 means that pmem_persist_fn is executed for each write operation.
 #
-#sync=1
+sync=0
 
 #
 # sync_file_range=write:n means that pmem_persist_fn is executed after n write operations.
 #
-sync_file_range=write:4
+#sync_file_range=write:4
 
 #
 # In case of 'scramble_buffers=1', the source buffer
@@ -71,9 +72,9 @@ directory=/mnt/pmem0
 rw=write
 stonewall
 
-[libpmem2-seqread]
-rw=read
-stonewall
+#[libpmem2-seqread]
+#rw=read
+#stonewall
 
 #[libpmem2-randwrite]
 #rw=randwrite
