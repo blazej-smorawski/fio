@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
-# pmdk v1.9.1 release
-PMDK_VERSION=1.9.1
+# pmdk v1.11.1 release
+PMDK_VERSION=1.11.1
 
 WORKDIR=$(pwd)
 
