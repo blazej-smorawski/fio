@@ -2127,6 +2127,11 @@ struct fio_option fio_options[FIO_MAX_OPTS] = {
 			    .help = "PMDK libpmem based IO engine",
 			  },
 #endif
+#ifdef CONFIG_LIBPMEM2
+			  { .ival = "libpmem2",
+				  .help = "PMDK libpmem2 based IO engine",
+			  },
+#endif
 #ifdef CONFIG_HTTP
 			  { .ival = "http",
 			    .help = "HTTP (WebDAV/S3) IO engine",

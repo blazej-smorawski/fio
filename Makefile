@@ -215,6 +215,11 @@ ifdef CONFIG_LIBPMEM
   libpmem_LIBS = -lpmem
   ENGINES += libpmem
 endif
+ifdef CONFIG_LIBPMEM2
+  libpmem2_SRCS = engines/libpmem2.c
+  libpmem2_LIBS = -lpmem2
+  ENGINES += libpmem2
+endif
 ifdef CONFIG_IME
   SOURCE += engines/ime.c
 endif
