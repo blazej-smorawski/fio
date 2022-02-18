@@ -47,8 +47,6 @@ DPKGCFG
                 libgoogle-perftools-dev
                 libiscsi-dev
                 libnbd-dev
-                libpmem-dev
-                libpmemblk-dev
                 librbd-dev
                 libtcmalloc-minimal4
                 nvidia-cuda-dev
@@ -67,6 +65,13 @@ DPKGCFG
     sudo apt-get -qq update
     echo "Installing packages..."
     sudo apt-get install "$opts" -o APT::Immediate-Configure=false --no-install-recommends -qq -y "${pkgs[@]}"
+
+    if [ "${CI_TARGET_ARCH}" = "x86_64" ]; then
+       echo "Installing PMDK from sources"
+       "${SCRIPT_DIR}/actions-install-pmdk.sh"
+       # PMDK libraries are installed in /usr/lib64/
+       sudo ldconfig -v /usr/lib64/
+    fi
 }
 
 install_linux() {

@@ -162,6 +162,9 @@ libhdfs="no"
 pmemblk="no"
 devdax="no"
 pmem="no"
+pmem2="no"
+libminiasync="no"
+libminiasync_vdm_dml="no"
 cuda="no"
 libcufile="no"
 disable_lex=""
@@ -2161,6 +2164,26 @@ fi
 print_config "libpmem1_5" "$libpmem1_5"
 
 ##########################################
+# Check whether we have libpmem2
+if test "$libpmem2" != "yes" ; then
+  libpmem2="no"
+fi
+cat > $TMPC << EOF
+#include <libpmem2.h>
+int main(int argc, char **argv)
+{
+  struct pmem2_config *cfg;
+  pmem2_config_new(&cfg);
+  pmem2_config_delete(&cfg);
+  return 0;
+}
+EOF
+if compile_prog "" "-lpmem2" "libpmem2"; then
+  libpmem2="yes"
+fi
+print_config "libpmem2" "$libpmem2"
+
+##########################################
 # Check whether we have libpmemblk
 # libpmem is a prerequisite
 if test "$libpmemblk" != "yes" ; then
@@ -2182,14 +2205,19 @@ EOF
 fi
 print_config "libpmemblk" "$libpmemblk"
 
-# Choose libpmem-based ioengines
-if test "$libpmem" = "yes" && test "$disable_pmem" = "no"; then
-  devdax="yes"
-  if test "$libpmem1_5" = "yes"; then
-    pmem="yes"
+# Choose pmem-based ioengines
+if test "$disable_pmem" = "no"; then
+  if test "$libpmem" = "yes"; then
+    devdax="yes"
+    if test "$libpmem1_5" = "yes"; then
+      pmem="yes"
+    fi
+    if test "$libpmemblk" = "yes"; then
+      pmemblk="yes"
+    fi
   fi
-  if test "$libpmemblk" = "yes"; then
-    pmemblk="yes"
+  if test "$libpmem2" = "yes"; then
+    pmem2="yes"
   fi
 fi
 
@@ -2204,6 +2232,51 @@ print_config "PMDK dev-dax engine" "$devdax"
 ##########################################
 # Report whether libpmem engine is enabled
 print_config "PMDK libpmem engine" "$pmem"
+
+##########################################
+# Report whether libpmem2 engine is enabled
+print_config "PMDK libpmem2 engine" "$pmem2"
+
+##########################################
+# Check whether we have libminiasync
+if test "$libminiasync" != "yes" ; then
+  libminiasync="no"
+fi
+cat > $TMPC << EOF
+#include <libminiasync.h>
+#include <stdlib.h>
+int main(int argc, char **argv)
+{
+  struct data_mover_sync *dms = data_mover_sync_new();
+  data_mover_sync_delete(dms);
+  return 0;
+}
+EOF
+if compile_prog "" "-lminiasync" "libminiasync"; then
+  libminiasync="yes"
+fi
+print_config "libminiasync" "$libminiasync"
+
+##########################################
+# Check whether we have libminiasync-vdm-dml
+if test "$dml" != "yes" ; then
+  libminiasync_vdm_dml="no"
+fi
+cat > $TMPC << EOF
+#include <libminiasync.h>
+#include <libminiasync-vdm-dml.h>
+
+int main(int argc, char **argv)
+{
+  struct data_mover_dml *dmd = data_mover_dml_new(DATA_MOVER_DML_HARDWARE);
+  data_mover_dml_delete(dmd);
+  return 0;
+}
+EOF
+if compile_prog "" "-lminiasync -lminiasync-dml -lpthread -l:libdml.a -ldl" "libdml"; then
+  libminiasync_vdm_dml="yes"
+fi
+print_config "libminiasync-vdm-dml" "$libminiasync_vdm_dml"
 
 ##########################################
 # Check whether we support DDN's IME
@@ -3057,6 +3130,15 @@ if test "$devdax" = "yes" ; then
 fi
 if test "$pmem" = "yes" ; then
   output_sym "CONFIG_LIBPMEM"
+fi
+if test "$pmem2" = "yes" ; then
+  output_sym "CONFIG_LIBPMEM2"
+fi
+if test "$libminiasync" = "yes" ; then
+  output_sym "CONFIG_LIBMINIASYNC"
+fi
+if test "$libminiasync_vdm_dml" = "yes" ; then
+  output_sym "CONFIG_VDM_DML"
 fi
 if test "$libime" = "yes" ; then
   output_sym "CONFIG_IME"

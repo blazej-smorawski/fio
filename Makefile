@@ -215,6 +215,17 @@ ifdef CONFIG_LIBPMEM
   libpmem_LIBS = -lpmem
   ENGINES += libpmem
 endif
+ifdef CONFIG_LIBPMEM2
+  libpmem2_SRCS = engines/libpmem2.c
+  libpmem2_LIBS = -lpmem2
+  ENGINES += libpmem2
+endif
+ifdef CONFIG_LIBMINIASYNC
+  libpmem2_LIBS += -lminiasync -lpthread
+endif
+ifdef CONFIG_VDM_DML
+  libpmem2_LIBS += -lminiasync-vdm-dml -l:libdml.a -ldl
+endif
 ifdef CONFIG_IME
   SOURCE += engines/ime.c
 endif
