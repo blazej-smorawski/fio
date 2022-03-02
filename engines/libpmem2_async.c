@@ -182,16 +182,16 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 	}
 
 	if (fdd->vdm != NULL) {
-		//data_mover_threads_delete(fdd->vdm);
-		data_mover_dml_delete(fdd->vdm);
+		data_mover_threads_delete(fdd->vdm);
+		//data_mover_dml_delete(fdd->vdm);
 	}
 
-	//struct data_mover_threads *dmt = data_mover_threads_new(2,32768,FUTURE_NOTIFIER_NONE);
-	//data_mover_threads_set_memcpy_fn(dmt,pmem2_get_memcpy_fn(fdd->map));
-	struct data_mover_dml *dmd = data_mover_dml_new();
+	struct data_mover_threads *dmt = data_mover_threads_new(2,32768,FUTURE_NOTIFIER_NONE);
+	data_mover_threads_set_memcpy_fn(dmt,pmem2_get_memcpy_fn(fdd->map));
+	//struct data_mover_dml *dmd = data_mover_dml_new();
 
-	//fdd->vdm = data_mover_threads_get_vdm(dmt);
-	fdd->vdm = data_mover_dml_get_vdm(dmd);
+	fdd->vdm = data_mover_threads_get_vdm(dmt);
+	//fdd->vdm = data_mover_dml_get_vdm(dmd);
 
 	return ret;
 	failed_source_allocated:
