@@ -222,7 +222,7 @@ ifdef CONFIG_LIBPMEM2
 endif
 ifdef CONFIG_LIBPMEM2_ASYNC
   libpmem2_async_SRCS = engines/libpmem2_async.c
-  libpmem2_async_LIBS = -lminiasync
+  libpmem2_async_LIBS = -lminiasync -lminiasync-dml
   ENGINES += libpmem2_async
 endif
 ifdef CONFIG_IME
