@@ -59,7 +59,7 @@ struct fio_libpmem2_async_data {
     struct pmem2_source *src;
 
     /* Data for miniasync */
-    struct data_mover_threads *dmt;
+    struct vdm *vdm;
     struct runtime *r;
     /*
      * Array of futures that were not synchronised yet.
@@ -181,11 +181,17 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 		goto failed_source_allocated;
 	}
 
-	if (fdd->dmt)
-		data_mover_threads_delete(fdd->dmt);
+	if (fdd->vdm == NULL) {
+		data_mover_threads_delete(fdd->vdm);
+		//data_mover_dml_delete(fdd->vdm);
+	}
 
-	fdd->dmt= data_mover_threads_new(2,32768,FUTURE_NOTIFIER_NONE);
-	data_mover_threads_set_memcpy_fn(fdd->dmt,pmem2_get_memcpy_fn(fdd->map));
+	struct data_mover_threads *dmt = data_mover_threads_new(2,32768,FUTURE_NOTIFIER_NONE);
+	data_mover_threads_set_memcpy_fn(dmt,pmem2_get_memcpy_fn(fdd->map));
+	//struct data_mover_dml *dmd = data_mover_dml_new();
+
+	fdd->vdm = data_mover_threads_get_vdm(dmt);
+	//fdd->vdm = data_mover_dml_get_vdm(dmd);
 
 	return ret;
 	failed_source_allocated:
@@ -293,7 +299,7 @@ static enum fio_q_status fio_libpmem2_async_queue(struct thread_data *td,
 				if(fdd->queued_io_us[i]==NULL) {
 					fdd->queued_io_us[i]=io_u;
 					fdd->futs[fdd->futs_count] = vdm_memcpy(
-						data_mover_threads_get_vdm(fdd->dmt), io_u->mmap_data, io_u->xfer_buf,
+						fdd->vdm, io_u->mmap_data, io_u->xfer_buf,
 						io_u->xfer_buflen, 0);
 					fdd->futs_count++;
 					return FIO_Q_QUEUED;
