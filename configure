@@ -2129,7 +2129,8 @@ cat > $TMPC << EOF
 #include <libminiasync.h>
 int main(int argc, char **argv)
 {
-  struct vdm_descriptor *vdm = vdm_descriptor_synchronous();
+  struct data_mover_threads *dmt = data_mover_threads_default();
+  data_mover_threads_delete(dmt);
   return 0;
 }
 EOF
