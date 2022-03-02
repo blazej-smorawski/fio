@@ -181,7 +181,7 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 		goto failed_source_allocated;
 	}
 
-	if (fdd->vdm == NULL) {
+	if (fdd->vdm != NULL) {
 		//data_mover_threads_delete(fdd->vdm);
 		data_mover_dml_delete(fdd->vdm);
 	}
