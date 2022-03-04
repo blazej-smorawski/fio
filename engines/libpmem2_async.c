@@ -93,6 +93,7 @@ static int fio_libpmem2_async_init(struct thread_data *td) {
 	if (fdd == NULL)
 		return 1;
 
+	fdd->vdm = NULL;
 	fdd->futs_count = 0;
 	//fdd->vdm = vdm_new(vdm_descriptor_threads(), NULL);
 	/*
