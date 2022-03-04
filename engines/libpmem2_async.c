@@ -185,6 +185,7 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 	if (fdd->vdm == NULL) {
 		//data_mover_threads_delete(fdd->vdm);
 		struct data_mover_dml *dmd = data_mover_dml_new();
+		fdd->vdm = data_mover_dml_get_vdm(dmd);
 	}
 
 	//struct data_mover_threads *dmt = data_mover_threads_new(2,32768,FUTURE_NOTIFIER_NONE);
