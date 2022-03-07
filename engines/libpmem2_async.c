@@ -359,7 +359,6 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 			ndone++;
 			//io_u_mark_complete(td, 1);
 		}
-		sleep(1);
 	}
 	printQueued(fdd);
 	dprint(FD_IO, "DEBUG nstarted=%u ndone=%u\n", nstarted, ndone);
@@ -391,7 +390,6 @@ static int fio_libpmem2_async_getevents(struct thread_data *td, unsigned int min
 				} else {
 					//dprint(FD_IO, "futs[%d] poll\n", i);
 					future_poll(FUTURE_AS_RUNNABLE(&fdd->futs[i]), NULL);
-					sleep(1);
 				}
 			}
 			if(events == max) {
