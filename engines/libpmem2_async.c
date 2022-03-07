@@ -81,6 +81,17 @@ struct fio_libpmem2_async_data {
     struct io_u **event_io_us;
 };
 
+void printQueued(struct fio_libpmem2_async_data *fdd) {
+	dprint(FD_IO, "queue:[");
+	for(int i=0;i<fdd->futs_count;i++){
+		dprint(FD_IO, "%p",fdd->queued_io_us[i]);
+		if(i!=fdd->futs_count-1) {
+			dprint(FD_IO, ",");
+		}
+	}
+	dprint(FD_IO, "]\n");
+}
+
 static int fio_libpmem2_async_init(struct thread_data *td) {
 	struct thread_options *o = &td->o;
 	struct fio_libpmem2_async_data *fdd = td->io_ops_data;
@@ -273,6 +284,7 @@ static enum fio_q_status fio_libpmem2_async_queue(struct thread_data *td,
 		dprint(FD_IO, "DEBUG FIO_Q_BUSY\n");
 		return FIO_Q_BUSY;
 	}
+	printQueued(fdd);
 
 	fio_ro_check(td, io_u);
 	io_u->error = 0;
@@ -301,7 +313,7 @@ static enum fio_q_status fio_libpmem2_async_queue(struct thread_data *td,
 					fdd->queued_io_us[i]=io_u;
 					fdd->futs[fdd->futs_count] = vdm_memcpy(
 						fdd->vdm, io_u->mmap_data, io_u->xfer_buf,
-						io_u->xfer_buflen, 0);
+						io_u->xfer_buflen, MINIASYNC_DML_F_HARDWARE);
 					fdd->futs_count++;
 					return FIO_Q_QUEUED;
 				}
@@ -324,7 +336,7 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 	unsigned nstarted = 0;
 	struct fio_libpmem2_async_data *fdd = td->io_ops_data;
 	dprint(FD_IO, "DEBUG fio_libpmem2_async_commit\n");
-
+	printQueued(fdd);
 	for (int i = 0; i < td->o.iodepth; i++) {
 		if(fdd->queued_io_us[i] == NULL ||
 			fdd->futs[i].base.context.state != FUTURE_STATE_IDLE) {
@@ -348,7 +360,7 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 			//io_u_mark_complete(td, 1);
 		}
 	}
-
+	printQueued(fdd);
 	dprint(FD_IO, "DEBUG nstarted=%u ndone=%u\n", nstarted, ndone);
 	return 0;
 }
@@ -359,7 +371,7 @@ static int fio_libpmem2_async_getevents(struct thread_data *td, unsigned int min
 	int events = 0;
 
 	dprint(FD_IO, "DEBUG fio_libpmem2_async_getevents\n");
-
+	printQueued(fdd);
 	while(events < min) {
 		for (int i = 0; i < td->o.iodepth; i++) {
 			if (fdd->queued_io_us[i] != NULL) {
@@ -385,7 +397,7 @@ static int fio_libpmem2_async_getevents(struct thread_data *td, unsigned int min
 			}
 		}
 	}
-
+	printQueued(fdd);
 	fdd->futs_count -= events;
 	dprint(FD_IO, "DEBUG events=%d\n", events);
 	return events;

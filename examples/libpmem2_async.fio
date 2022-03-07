@@ -1,6 +1,6 @@
 [global]
-bs=1g
-size=16g
+bs=64m
+size=4g
 ioengine=libpmem2_async
 norandommap
 time_based
