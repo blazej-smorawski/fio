@@ -82,14 +82,14 @@ struct fio_libpmem2_async_data {
 };
 
 void printQueued(struct fio_libpmem2_async_data *fdd) {
-	dprint(FD_IO, "queue:[");
+	printf("queue:[");
 	for(int i=0;i<fdd->futs_count;i++){
-		dprint(FD_IO, "%p",fdd->queued_io_us[i]);
+		printf("%p",fdd->queued_io_us[i]);
 		if(i!=fdd->futs_count-1) {
-			dprint(FD_IO, ",");
+			printf(",");
 		}
 	}
-	dprint(FD_IO, "]\n");
+	printf("]\n");
 }
 
 static int fio_libpmem2_async_init(struct thread_data *td) {
@@ -338,9 +338,13 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 	dprint(FD_IO, "DEBUG fio_libpmem2_async_commit\n");
 	printQueued(fdd);
 	for (int i = 0; i < td->o.iodepth; i++) {
-		if(fdd->queued_io_us[i] == NULL ||
-			fdd->futs[i].base.context.state != FUTURE_STATE_IDLE) {
-			dprint(FD_IO,"SKIP\n");
+		if(fdd->queued_io_us[i] == NULL)
+		{
+			dprint(FD_IO,"NULL\n");
+			continue;
+		}
+		if(fdd->futs[i].base.context.state != FUTURE_STATE_IDLE) {
+			dprint(FD_IO,"IDLE\n");
 			continue;
 		}
 		/*
