@@ -340,6 +340,7 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 	for (int i = 0; i < td->o.iodepth; i++) {
 		if(fdd->queued_io_us[i] == NULL ||
 			fdd->futs[i].base.context.state != FUTURE_STATE_IDLE) {
+			dprint(FD_IO,"SKIP\n");
 			continue;
 		}
 		/*
@@ -347,6 +348,7 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 		 * they are not complete yet
 		 */
 		do {
+			dprint(FD_IO,"POLL\n");
 			dprint(FD_IO, "DEBUG fio_libpmem2_async_commit [%d]-state-[%d]\n",i,fdd->futs[i].base.context.state);
 			future_poll(FUTURE_AS_RUNNABLE(&fdd->futs[i]), NULL);
 			dprint(FD_IO, "DEBUG fio_libpmem2_async_commit [%d]-state-[%d]\n",i,fdd->futs[i].base.context.state);
