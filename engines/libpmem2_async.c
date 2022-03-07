@@ -397,6 +397,7 @@ static int fio_libpmem2_async_getevents(struct thread_data *td, unsigned int min
 			if(events == max) {
 				break;
 			}
+			sleep(100);
 		}
 	}
 	printQueued(fdd);
