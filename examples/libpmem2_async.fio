@@ -11,9 +11,9 @@ disable_slat=1
 disable_clat=1
 clat_percentiles=0
 
-iodepth=4
-iodepth_batch_complete_min=4
-iodepth_batch_complete_max=4
+iodepth=1
+iodepth_batch_complete_min=1
+iodepth_batch_complete_max=1
 thread
 numjobs=1
 runtime=30
