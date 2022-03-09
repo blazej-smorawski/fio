@@ -178,16 +178,16 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 	} else
 		flags = PMEM2_PROT_READ;
 
-	if (pmem2_config_set_protection(fdd->cfg, flags) != 0) {
+	/*if (pmem2_config_set_protection(fdd->cfg, flags) != 0) {
 		dprint(FD_IO, "DEBUG failed set protection\n");
 		ret = 1;
 		goto failed_source_allocated;
-	}
+	}*/
 	/*
 	 * Depending on the hardware, the granularity might be better
 	 */
 	if (pmem2_config_set_required_store_granularity(fdd->cfg,
-		PMEM2_GRANULARITY_PAGE)) {
+		PMEM2_GRANULARITY_CACHE_LINE)) {
 		ret = 1;
 		goto failed_source_allocated;
 	}
