@@ -153,6 +153,9 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 	/*
 	 * Prepare configuration for a new mapping
 	 */
+
+	int fd = open("/mnt/pmem1/libpmem2-seqwrite.0.0", O_RDWR);
+
 	if (pmem2_config_new(&fdd->cfg)) {
 		ret = 1;
 		goto failed_no_allocations;
@@ -310,7 +313,6 @@ static enum fio_q_status fio_libpmem2_async_queue(struct thread_data *td,
 				 * Search for a free spot
 				 */
 				if(fdd->queued_io_us[i]==NULL) {
-					void *dst = malloc(io_u->xfer_buflen);
 					fdd->queued_io_us[i]=io_u;
 					fdd->futs[fdd->futs_count] = vdm_memcpy(
 						fdd->vdm, io_u->mmap_data, io_u->xfer_buf,
