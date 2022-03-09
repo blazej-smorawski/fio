@@ -344,7 +344,7 @@ static int fio_libpmem2_async_commit(struct thread_data *td) {
 			continue;
 		}
 		if(fdd->futs[i].base.context.state != FUTURE_STATE_IDLE) {
-			dprint(FD_IO,"IDLE\n");
+			dprint(FD_IO,"NOT IDLE\n");
 			continue;
 		}
 		/*
@@ -403,7 +403,7 @@ static int fio_libpmem2_async_getevents(struct thread_data *td, unsigned int min
 			if(events == max) {
 				break;
 			}
-			sleep(100);
+			sleep(1);
 		}
 	}
 	printQueued(fdd);
