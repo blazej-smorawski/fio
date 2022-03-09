@@ -316,7 +316,7 @@ static enum fio_q_status fio_libpmem2_async_queue(struct thread_data *td,
 					fdd->queued_io_us[i]=io_u;
 					fdd->futs[fdd->futs_count] = vdm_memcpy(
 						fdd->vdm, io_u->mmap_data, io_u->xfer_buf,
-						io_u->xfer_buflen, MINIASYNC_DML_F_PATH_HW);
+						io_u->xfer_buflen, MINIASYNC_DML_F_PATH_HW|MINIASYNC_DML_F_MEM_DURABLE);
 					fdd->futs_count++;
 					return FIO_Q_QUEUED;
 				}
