@@ -160,7 +160,7 @@ static int fio_libpmem2_async_map_file_completely(struct thread_data *td,
 		ret = 1;
 		goto failed_no_allocations;
 	}
-	if (pmem2_source_from_fd(&fdd->src, f->fd)) {
+	if (pmem2_source_from_fd(&fdd->src, fd)) {
 		ret = 1;
 		goto failed_config_allocated;
 	}
