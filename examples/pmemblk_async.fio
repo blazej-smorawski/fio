@@ -1,7 +1,6 @@
 [global]
 bs=1m
-io_size=1g
-ioengine=pmemblk
+ioengine=pmemblk_async
 norandommap
 time_based
 runtime=30
@@ -20,8 +19,8 @@ cpus_allowed_policy=split
 #
 iodepth=1
 direct=1
-thread
-numjobs=16
+thread=1
+numjobs=1
 #
 # Unlink can be used to remove the files when done, but if you are
 # using serial runs with stonewall, and you want the files to be created
@@ -55,8 +54,7 @@ unlink=0
 # While both files in this example have the same block size and file
 # size, this is not required.
 #
-filename=/pmem0/fio-test,4096,1024
-#filename=/pmem1/fio-test,4096,1024
+filename=/tmp/pmemblk-pool
 
 [pmemblk-write]
 rw=randwrite

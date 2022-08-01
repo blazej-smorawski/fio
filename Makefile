@@ -205,6 +205,10 @@ ifdef CONFIG_PMEMBLK
   pmemblk_LIBS = -lpmemblk
   ENGINES += pmemblk
 endif
+ifdef CONFIG_PMEMBLK_ASYNC
+  pmemblk_SRCS = engines/pmemblk_async.c
+  ENGINES += pmemblk_async
+endif
 ifdef CONFIG_LINUX_DEVDAX
   dev-dax_SRCS = engines/dev-dax.c
   dev-dax_LIBS = -lpmem

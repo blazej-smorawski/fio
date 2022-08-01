@@ -3123,6 +3123,7 @@ if test "$mtd" = "yes" ; then
 fi
 if test "$pmemblk" = "yes" ; then
   output_sym "CONFIG_PMEMBLK"
+  output_sym "CONFIG_PMEMBLK_ASYNC"
 fi
 if test "$devdax" = "yes" ; then
   output_sym "CONFIG_LINUX_DEVDAX"
