@@ -73,19 +73,53 @@
 #include <libpmemblk.h>
 
 #include "../fio.h"
+#include "../optgroup.h"
 
 /*
  * libpmemblk
  */
 #define PMB_CREATE (0x0001) /* should create file */
+#define PMB_SIZE 2<34 /*16 GiB */
 
 pthread_mutex_t shared_pool_lock = PTHREAD_MUTEX_INITIALIZER;
+
+struct fio_pmemblk_options_values {
+    void *pad;
+    int *async;
+};
+
+struct fio_option libpmem2_fio_options[] = {
+        {
+                .name	= "async",
+                .lname	= "asynchronous_mode",
+                .type	= FIO_OPT_STR_STORE,
+                .off1	= offsetof(struct fio_pmemblk_options_values, async),
+                .def 	= "",
+                .help	= "Use asynchronous operations",
+                .category = FIO_OPT_C_ENGINE,
+                .group	= FIO_OPT_G_PMEMBLK,
+        },
+        {
+                .name	= NULL,
+        },
+};
 
 struct fio_pmemblk_data {
 	PMEMblkpool *pool;
 	size_t nblocks;
 	size_t bsize;
+
+    /* Data for asynchronous operations */
+    int async;
+    int queued;
+    struct pmemblk_write_async_future *futures;
+    struct io_u **queued_events;
+    struct io_u **completed_events;
 };
+
+static int fio_pmemblk_init(struct thread_data *td) {
+    struct fio_pmemblk_options_values *options = td->eo;
+}
 
 static int pmb_get_flags(struct thread_data *td, uint64_t *pflags)
 {
@@ -127,7 +161,7 @@ static struct fio_pmemblk_data* pmb_open(struct thread_data *td, struct fio_file
 			(0 < o->rw_min_bs)) {
 			pmb->pool =
 				pmemblk_create(f->file_name, o->rw_min_bs,
-					f->io_size, 0644);
+					PMB_SIZE, 0644);
 		}
 		if (!pmb->pool) {
 			log_err("pmemblk: unable to open pmemblk pool file %s (%s)\n",
@@ -169,7 +203,7 @@ static int fio_pmemblk_open_file(struct thread_data *td, struct fio_file *f)
 	return 0;
 }
 
-static void pmb_close(struct fio_pmemblk_data *pmb)
+static void fio_pmblk_close(struct fio_pmemblk_data *pmb)
 {
 	pthread_mutex_lock(&shared_pool_lock);
 
@@ -186,7 +220,7 @@ static int fio_pmemblk_close_file(struct thread_data fio_unused *td,
 	struct fio_pmemblk_data *pmb = FILE_ENG_DATA(f);
 
 	if (pmb)
-		pmb_close(pmb);
+        fio_pmblk_close(pmb);
 
 	FILE_SET_ENG_DATA(f, NULL);
 	return 0;
@@ -218,6 +252,102 @@ static int fio_pmemblk_get_file_size(struct thread_data *td, struct fio_file *f)
 	fio_file_set_size_known(f);
 
 	return 0;
+}
+
+static int fio_pmemblk_commit(struct thread_data *td) {
+    unsigned nstarted = 0;
+	struct fio_pmemblk_data *pmb = td->io_ops_data;
+	dprint(FD_IO, "DEBUG fio_libpmem2_async_commit\n");
+
+	for (int i = 0; i < td->o.iodepth; i++) {
+		if(pmb->queued_events[i] == NULL ||
+		   pmb->futures[i].base.context.state != FUTURE_STATE_IDLE) {
+			continue;
+		}
+		/*
+		 * Here we poll the futures for the first time, so we know
+		 * they are not complete yet
+		 */
+		do {
+			future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i]), NULL);
+		} while (pmb->futures[i].base.context.state == FUTURE_STATE_IDLE);
+
+        /*
+         * Leaving the loop, we know that the future is complete or running
+         */
+		nstarted++;
+		io_u_queued(td, pmb->queued_events[i]);
+	}
+
+	dprint(FD_IO, "DEBUG nstarted=%u\n", nstarted);
+    return 0;
+}
+
+/*
+ * The ->event() hook is called to match an event number with an io_u.
+ * After the core has called ->getevents() and it has returned eg 3,
+ * the ->event() hook must return the 3 events that have completed for
+ * subsequent calls to ->event() with [0-2]. Required.
+ */
+static struct io_u *fio_pmblk_event(struct thread_data *td, int event)
+{
+    struct fio_pmemblk_data *pmb = td->io_ops_data;
+
+    dprint(FD_IO, "DEBUG fio_pmemblk_event=%d\n", event);
+    return pmb->completed_events[event];
+}
+
+/*
+ * The ->getevents() hook is used to reap completion events from an async
+ * io engine. It returns the number of completed events since the last call,
+ * which may then be retrieved by calling the ->event() hook with the event
+ * numbers. Required.
+ */
+static int fio_pmblk_getevents(struct thread_data *td, unsigned int min,
+                                  unsigned int max, const struct timespec *t)
+{
+    int events = 0;
+    struct fio_pmemblk_data *pmb = td->io_ops_data;
+
+	dprint(FD_IO, "DEBUG fio_pmblk_getevents\n");
+	while(events < min) {
+		for (int i = 0; i < td->o.iodepth; i++) {
+            /*
+             * Queued operations that were not collected into event_io_us
+             * have a not NULL pointer in queued_io_us
+             */
+			if (pmb->queued_events[i] != NULL) {
+				if(pmb->futures[i].base.context.state == FUTURE_STATE_COMPLETE) {
+					/*
+					 * The future is complete, so we can put it into events
+					 * array and remove it from queue
+					 */
+					pmb->completed_events[events++] = pmb->queued_events[i];
+
+                    /*
+                     * We set value at the index to NULL, so
+                     * the queued io will not be added to events_io_us
+                     * again.
+                     */
+					pmb->queued_events[i] = NULL;
+					if(events == max) {
+						goto max_events;
+					}
+				} else {
+                    /*
+                     * Future was not complete yet so, we poll it to get
+                     * it's state set if it changed by the time of a previous
+                     * future_poll.
+                     */
+					future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i]), NULL);
+				}
+			}
+		}
+	}
+max_events:
+    pmb->queued -= events;
+    dprint(FD_IO, "DEBUG events=%d\n", events);
+    return events;
 }
 
 static enum fio_q_status fio_pmemblk_queue(struct thread_data *td,
@@ -254,20 +384,24 @@ static enum fio_q_status fio_pmemblk_queue(struct thread_data *td,
 		buf = io_u->xfer_buf;
 		off /= pmb->bsize;
 		len /= pmb->bsize;
-		while (0 < len) {
-			if (io_u->ddir == DDIR_READ) {
-				if (0 != pmemblk_read(pmb->pool, buf, off)) {
-					io_u->error = errno;
-					break;
-				}
-			} else if (0 != pmemblk_write(pmb->pool, buf, off)) {
-				io_u->error = errno;
-				break;
-			}
-			buf += pmb->bsize;
-			off++;
-			len--;
-		}
+        if (pmb->queued==td->o.iodepth) {
+            return FIO_Q_BUSY;
+        }
+        for(int i=0;i<td->o.iodepth;i++) {
+            /*
+             * Search for a free spot
+             */
+            if (pmb->queued_events[i] == NULL) {
+                pmb->queued_events[i] = io_u;
+                if (io_u->ddir == DDIR_WRITE) {
+                    pmb->futures[pmb->queued] = pmemblk_write_async(pmb->pool, buf, off);
+                } else if (io_u->ddir == DDIR_READ) {
+                    pmb->futures[pmb->queued] = pmemblk_write_async(pmb->pool, buf, off);
+                }
+            }
+        }
+
+        pmb->queued++;
 		off *= pmb->bsize;
 		len *= pmb->bsize;
 		io_u->resid = io_u->xfer_buflen - (off - io_u->offset);
