@@ -104,6 +104,11 @@ struct fio_option libpmem2_fio_options[] = {
         },
 };
 
+union pmemblk_async_future {
+    struct pmemblk_read_async_future read;
+    struct pmemblk_write_async_future write;
+};
+
 struct fio_pmemblk_data {
 	PMEMblkpool *pool;
 	size_t nblocks;
@@ -112,7 +117,7 @@ struct fio_pmemblk_data {
     /* Data for asynchronous operations */
     int async;
     int queued;
-    struct pmemblk_write_async_future *futures;
+    union pmemblk_async_future *futures;
     struct io_u **queued_events;
     struct io_u **completed_events;
 };
@@ -275,7 +280,7 @@ static int fio_pmemblk_commit(struct thread_data *td) {
 
 	for (int i = 0; i < td->o.iodepth; i++) {
 		if(pmb->queued_events[i] == NULL ||
-		   pmb->futures[i].base.context.state != FUTURE_STATE_IDLE) {
+		   FUTURE_STATE(&pmb->futures[i].write) != FUTURE_STATE_IDLE) {
 			continue;
 		}
 		/*
@@ -283,8 +288,8 @@ static int fio_pmemblk_commit(struct thread_data *td) {
 		 * they are not complete yet
 		 */
 		do {
-			future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i]), NULL);
-		} while (pmb->futures[i].base.context.state == FUTURE_STATE_IDLE);
+			future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i].write), NULL);
+		} while (FUTURE_STATE(&pmb->futures[i].write) == FUTURE_STATE_IDLE);
 
         /*
          * Leaving the loop, we know that the future is complete or running
@@ -331,7 +336,7 @@ static int fio_pmblk_getevents(struct thread_data *td, unsigned int min,
              * have a not NULL pointer in queued_io_us
              */
 			if (pmb->queued_events[i] != NULL) {
-				if(pmb->futures[i].base.context.state == FUTURE_STATE_COMPLETE) {
+				if(FUTURE_STATE(&pmb->futures[i].write) == FUTURE_STATE_COMPLETE) {
 					/*
 					 * The future is complete, so we can put it into events
 					 * array and remove it from queue
@@ -353,7 +358,7 @@ static int fio_pmblk_getevents(struct thread_data *td, unsigned int min,
                      * it's state set if it changed by the time of a previous
                      * future_poll.
                      */
-					future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i]), NULL);
+					future_poll(FUTURE_AS_RUNNABLE(&pmb->futures[i].write), NULL);
 				}
 			}
 		}
@@ -414,32 +419,31 @@ static enum fio_q_status fio_pmemblk_queue(struct thread_data *td,
                 break;
             }
 
-            off *= pmb->bsize;
-            len *= pmb->bsize;
             io_u->resid = io_u->xfer_buflen - (off - io_u->offset);
             return FIO_Q_COMPLETED;
         }
 
+        /*
+         * Handle asynchronous operations
+         */
         if (pmb->queued==td->o.iodepth) {
             return FIO_Q_BUSY;
         }
         for(int i=0;i<td->o.iodepth;i++) {
             /*
-             * Search for a free spot
+             * Search for a free spot in futures/events array
              */
             if (pmb->queued_events[i] == NULL) {
                 pmb->queued_events[i] = io_u;
                 if (io_u->ddir == DDIR_WRITE) {
-                    pmb->futures[pmb->queued] = pmemblk_write_async(pmb->pool, buf, off);
+                    pmb->futures[pmb->queued].write = pmemblk_write_async(pmb->pool, buf, off);
                 } else if (io_u->ddir == DDIR_READ) {
-                    pmb->futures[pmb->queued] = pmemblk_write_async(pmb->pool, buf, off);
+                    pmb->futures[pmb->queued].read = pmemblk_read_async(pmb->pool, buf, off);
                 }
             }
         }
 
         pmb->queued++;
-		off *= pmb->bsize;
-		len *= pmb->bsize;
 		io_u->resid = io_u->xfer_buflen - (off - io_u->offset);
 		return FIO_Q_QUEUED;
 	case DDIR_SYNC:
