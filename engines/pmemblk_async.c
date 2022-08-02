@@ -117,31 +117,53 @@ struct fio_pmemblk_data {
     struct io_u **completed_events;
 };
 
-static int fio_pmemblk_init(struct thread_data *td) {
-    struct fio_pmemblk_options_values *options = td->eo;
-}
-
 static int pmb_get_flags(struct thread_data *td, uint64_t *pflags)
 {
-	static int odirect_warned = 0;
+    static int odirect_warned = 0;
 
-	uint64_t flags = 0;
+    uint64_t flags = 0;
 
-	if (!td->o.odirect && !odirect_warned) {
-		odirect_warned = 1;
-		log_info("pmemblk: direct == 0, but pmemblk is always direct\n");
-	}
+    if (!td->o.odirect && !odirect_warned) {
+        odirect_warned = 1;
+        log_info("pmemblk: direct == 0, but pmemblk is always direct\n");
+    }
 
-	if (td->o.allow_create)
-		flags |= PMB_CREATE;
+    if (td->o.allow_create)
+        flags |= PMB_CREATE;
 
-	(*pflags) = flags;
-	return 0;
+    (*pflags) = flags;
+    return 0;
+}
+
+static int fio_pmemblk_init(struct thread_data *td) {
+    struct fio_pmemblk_options_values *options = td->eo;
+    struct fio_pmemblk_data *pmb;
+    struct thread_options *thread_options = &td->o;
+    uint64_t flags;
+    pmb_get_flags(td, &flags);
+
+    pthread_mutex_lock(&shared_pool_lock);
+
+    if (!pmb) {
+        pmb = malloc(sizeof(*pmb));
+        if (!pmb)
+            return 1;
+
+        if(options->async) {
+            pmb->futures =
+                    malloc(sizeof(*pmb->futures) * thread_options->iodepth);
+            pmb->queued_events =
+                    malloc(sizeof(*pmb->queued_events) * thread_options->iodepth);
+            pmb->completed_events =
+                    malloc(sizeof(*pmb->completed_events) * thread_options->iodepth);
+        }
+    }
+
+    pthread_mutex_unlock(&shared_pool_lock);
 }
 
 static struct fio_pmemblk_data* pmb_open(struct thread_data *td, struct fio_file *f)
 {
-
 	struct fio_pmemblk_data *pmb = FILE_ENG_DATA(f);
 	struct thread_options *o = &td->o;
 	uint64_t flags;
@@ -149,11 +171,7 @@ static struct fio_pmemblk_data* pmb_open(struct thread_data *td, struct fio_file
 
 	pthread_mutex_lock(&shared_pool_lock);
 
-	if (!pmb) {
-		pmb = malloc(sizeof(*pmb));
-		if (!pmb)
-			goto error;
-
+	if (!pmb->pool) {
 		/* try opening existing first, create it if needed */
 		pmb->pool = pmemblk_open(f->file_name, o->rw_min_bs);
 		if (!pmb->pool && (errno == ENOENT) &&
@@ -180,12 +198,8 @@ static struct fio_pmemblk_data* pmb_open(struct thread_data *td, struct fio_file
 	return pmb;
 
 error:
-	if (pmb) {
-		if (pmb->pool)
-			pmemblk_close(pmb->pool);
-		pmb->pool = NULL;
-		free(pmb);
-	}
+    if (pmb->pool)
+        pmemblk_close(pmb->pool);
 
 	pthread_mutex_unlock(&shared_pool_lock);
 	return NULL;
@@ -384,6 +398,28 @@ static enum fio_q_status fio_pmemblk_queue(struct thread_data *td,
 		buf = io_u->xfer_buf;
 		off /= pmb->bsize;
 		len /= pmb->bsize;
+
+        if (!pmb->async) {
+            if (io_u->ddir == DDIR_READ) {
+                /*
+                 * We assume that all io operations use same block size as
+                 * block size in pmemblk pool.
+                 */
+                if (0 != pmemblk_read(pmb->pool, buf, off)) {
+                    io_u->error = errno;
+                    break;
+                }
+            } else if (0 != pmemblk_write(pmb->pool, buf, off)) {
+                io_u->error = errno;
+                break;
+            }
+
+            off *= pmb->bsize;
+            len *= pmb->bsize;
+            io_u->resid = io_u->xfer_buflen - (off - io_u->offset);
+            return FIO_Q_COMPLETED;
+        }
+
         if (pmb->queued==td->o.iodepth) {
             return FIO_Q_BUSY;
         }
@@ -405,7 +441,7 @@ static enum fio_q_status fio_pmemblk_queue(struct thread_data *td,
 		off *= pmb->bsize;
 		len *= pmb->bsize;
 		io_u->resid = io_u->xfer_buflen - (off - io_u->offset);
-		break;
+		return FIO_Q_QUEUED;
 	case DDIR_SYNC:
 	case DDIR_DATASYNC:
 	case DDIR_SYNC_FILE_RANGE:
