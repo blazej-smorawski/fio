@@ -207,6 +207,7 @@ ifdef CONFIG_PMEMBLK
 endif
 ifdef CONFIG_PMEMBLK_ASYNC
   pmemblk_SRCS = engines/pmemblk_async.c
+  pmemblk_LIBS += -lminiasync
   ENGINES += pmemblk_async
 endif
 ifdef CONFIG_LINUX_DEVDAX

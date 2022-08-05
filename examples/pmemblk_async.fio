@@ -17,10 +17,11 @@ cpus_allowed_policy=split
 #   IOs are always direct
 #   Must use threads
 #
-iodepth=1
+async=0
+iodepth=16
 direct=1
-thread=1
-numjobs=1
+thread
+numjobs=4
 #
 # Unlink can be used to remove the files when done, but if you are
 # using serial runs with stonewall, and you want the files to be created
@@ -54,15 +55,15 @@ unlink=0
 # While both files in this example have the same block size and file
 # size, this is not required.
 #
-filename=/tmp/pmemblk-pool
+filename=/home/blazej-smorawski/Desktop/test
 
 [pmemblk-write]
 rw=randwrite
 stonewall
 
-[pmemblk-read]
-rw=randread
-stonewall
+#[pmemblk-read]
+#rw=randread
+#stonewall
 #
 # We're done, so unlink the file:
 #
